@@ -10,7 +10,6 @@ const VAPI_PHONE_ID = process.env.VAPI_PHONE_ID || '';
 const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
 
 console.log('BOT_TOKEN exists:', !!BOT_TOKEN);
-console.log('VAPI_KEY exists:', !!VAPI_KEY);
 console.log('VAPI_ASSISTANT_ID:', VAPI_ASSISTANT_ID);
 console.log('VAPI_PHONE_ID:', VAPI_PHONE_ID);
 
@@ -46,26 +45,44 @@ const rmKb = { remove_keyboard: true };
 const makeCall = async (phone, prompt) => {
   try {
     const n = phone.startsWith('+') ? phone : '+' + phone;
-    console.log('Calling:', n, '| Prompt:', prompt.substring(0, 80));
+    console.log('=== MAKING CALL ===');
+    console.log('Phone:', n);
+    console.log('Prompt length:', prompt.length);
+    console.log('Prompt preview:', prompt.substring(0, 150));
 
-    const r = await axios.post('https://api.vapi.ai/call', {
+    const callBody = {
       phoneNumberId: VAPI_PHONE_ID,
       assistantId: VAPI_ASSISTANT_ID,
       assistantOverrides: {
         model: {
           provider: 'openai',
           model: 'gpt-4o',
-          systemPrompt: prompt
+          // Use messages array - more reliable than systemPrompt field
+          messages: [
+            {
+              role: 'system',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          maxTokens: 250
         }
       },
       customer: { number: n }
-    }, { headers: { Authorization: `Bearer ${VAPI_KEY}` } });
+    };
 
-    console.log('Call started:', r.data?.id);
+    console.log('Call body:', JSON.stringify(callBody, null, 2));
+
+    const r = await axios.post('https://api.vapi.ai/call', callBody, {
+      headers: { Authorization: `Bearer ${VAPI_KEY}` }
+    });
+
+    console.log('Call started:', r.data?.id, r.data?.status);
     return { ok: true, id: r.data.id };
   } catch (e) {
-    console.error('Vapi err:', e.response?.data || e.message);
-    return { ok: false, error: e.response?.data?.message || e.message };
+    const errMsg = e.response?.data?.message || e.message;
+    console.error('Vapi err:', JSON.stringify(e.response?.data) || e.message);
+    return { ok: false, error: errMsg };
   }
 };
 
@@ -78,6 +95,8 @@ app.post('/webhook', async (req, res) => {
   const name = msg.from?.first_name || "do'st";
   const clean = p => p.replace(/[\s\-\(\)]/g, '');
   const phoneRe = /^\+?[0-9]{9,15}$/;
+
+  console.log('MSG:', chatId, '|', text.substring(0, 60));
 
   if (['/start', '/menu'].includes(text)) {
     setS(chatId, { waitingFor: 'waiting_prompt', prompt: '', phone: '' });
@@ -107,6 +126,7 @@ app.post('/webhook', async (req, res) => {
       await send(chatId, `📞 Nomer saqlandi: ${cp}\n\n🧠 Endi prompt yuboring.`, promptKb);
       return;
     }
+    console.log('Saved prompt for chatId', chatId, ':', s.prompt.substring(0, 100));
     await send(chatId, "⏳ Qo'ng'iroq boshlanmoqda...");
     const r = await makeCall(cp, s.prompt);
     setS(chatId, { waitingFor: 'waiting_prompt', prompt: '', phone: '' });
@@ -119,7 +139,8 @@ app.post('/webhook', async (req, res) => {
 
   if (text.length >= 5) {
     setS(chatId, { ...s, prompt: text, waitingFor: 'waiting_phone' });
-    await send(chatId, `✅ Prompt saqlandi!\n\n📞 Endi telefon raqam yuboring.\nFormat: +998901234567`, rmKb);
+    console.log('Prompt saved for', chatId, ':', text.substring(0, 100));
+    await send(chatId, `✅ Prompt saqlandi!\n\n📝 "${text.substring(0, 60)}..."\n\n📞 Endi telefon raqam yuboring.\nFormat: +998901234567`, rmKb);
     return;
   }
 
