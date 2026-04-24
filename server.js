@@ -49,7 +49,8 @@ const makeCall = async (phone, prompt) => {
         model: {
           provider: 'openai',
           model: 'gpt-4o',
-          systemPrompt: prompt,
+          // System prompt + birinchi gapni ham AI o'zi tanlashi uchun ko'rsatma
+          systemPrompt: prompt + '\n\nMUHIM: Suhbatni o\'zbek tilida o\'zing boshlaysan. Birinchi gapda o\'zingni tanishtir va rolinga mos savol ber.',
           temperature: 0.7,
           maxTokens: 250
         },
@@ -61,9 +62,7 @@ const makeCall = async (phone, prompt) => {
           provider: 'azure',
           language: 'uz-UZ'
         },
-        // Generic firstMessage - does NOT reference any specific role
-        // The role comes from systemPrompt only
-        firstMessage: "Assalomu alaykum! Sizga qanday yordam bera olaman?",
+        // firstMessage yo'q — AI system promptga qarab o'zi boshlaydi
         firstMessageMode: 'assistant-speaks-first',
         endCallFunctionEnabled: false,
         recordingEnabled: false
