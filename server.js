@@ -47,14 +47,24 @@ const makeCall = async (phone, prompt) => {
     const n = phone.startsWith('+') ? phone : '+'+phone;
     const r = await axios.post('https://api.vapi.ai/call', {
       phoneNumberId: VAPI_PHONE_ID,
-      assistantId: VAPI_ASSISTANT_ID,
-      assistantOverrides: {
+      assistant: {
         model: {
-          provider: 'openai',
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'system', content: prompt }]
+        provider: 'openai',
+         model: 'gpt-4o-mini',
+           messages: [
+        {
+        role: 'system',
+        content: prompt
         }
+      ]
+     },
+      voice: {
+       provider: 'vapi',
+       voiceId: 'Elliot'
+     },  
+     firstMessage: "Assalomu alaykum!"
       },
+      
       customer: { number: n }
     }, { headers: { Authorization: `Bearer ${VAPI_KEY}` } });
     return { ok: true, id: r.data.id };
