@@ -46,12 +46,22 @@ const makeCall = async (phone, prompt) => {
   try {
     const n = phone.startsWith('+') ? phone : '+'+phone;
     const r = await axios.post('https://api.vapi.ai/call', {
-      phoneNumberId: VAPI_PHONE_ID, assistantId: VAPI_ASSISTANT_ID,
-      assistantOverrides: { model: { messages: [{ role:'system', content:prompt }] } },
+      phoneNumberId: VAPI_PHONE_ID,
+      assistantId: VAPI_ASSISTANT_ID,
+      assistantOverrides: {
+        model: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'system', content: prompt }]
+        }
+      },
       customer: { number: n }
     }, { headers: { Authorization: `Bearer ${VAPI_KEY}` } });
     return { ok: true, id: r.data.id };
-  } catch(e) { return { ok: false, error: e.response?.data?.message || e.message }; }
+  } catch(e) {
+    console.error('Vapi err:', e.response?.data || e.message);
+    return { ok: false, error: e.response?.data?.message || e.message };
+  }
 };
 
 app.post('/webhook', async (req, res) => {
