@@ -43,7 +43,6 @@ const makeCall = async (phone, prompt) => {
     console.log('CALL to:', n);
     console.log('PROMPT:', prompt);
 
-    // Inline assistant - Jasur ovozi (Azure Sardor) + TG promti
     const r = await axios.post('https://api.vapi.ai/call', {
       phoneNumberId: VAPI_PHONE_ID,
       assistant: {
@@ -62,7 +61,9 @@ const makeCall = async (phone, prompt) => {
           provider: 'azure',
           language: 'uz-UZ'
         },
-        firstMessage: "Assalomu alaykum! Jasurman TechShopdan — bugun telefon narxlari juda zo'r, nima kerak sizga?",
+        // Generic firstMessage - does NOT reference any specific role
+        // The role comes from systemPrompt only
+        firstMessage: "Assalomu alaykum! Sizga qanday yordam bera olaman?",
         firstMessageMode: 'assistant-speaks-first',
         endCallFunctionEnabled: false,
         recordingEnabled: false
