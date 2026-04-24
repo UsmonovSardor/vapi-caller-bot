@@ -48,16 +48,12 @@ const makeCall = async (phone, prompt) => {
     const r = await axios.post('https://api.vapi.ai/call', {
       phoneNumberId: VAPI_PHONE_ID,
       assistant: {
-        model: {
-        provider: 'openai',
-         model: 'gpt-4o-mini',
-           messages: [
-        {
-        role: 'system',
-        content: prompt
-        }
-      ]
-     },
+       model: {
+       provider: 'openai',
+        model: 'gpt-4o-mini',
+       systemPrompt: prompt,
+       temperature: 0.7,
+      },
       voice: {
        provider: 'vapi',
        voiceId: 'Elliot'
