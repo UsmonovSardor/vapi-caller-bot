@@ -13,34 +13,24 @@ console.log('BOT_TOKEN exists:', !!BOT_TOKEN);
 console.log('VAPI_KEY exists:', !!VAPI_KEY);
 console.log('VAPI_ASSISTANT_ID:', VAPI_ASSISTANT_ID);
 console.log('VAPI_PHONE_ID:', VAPI_PHONE_ID);
-console.log('WEBHOOK_URL:', WEBHOOK_URL);
 
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
-// In-memory sessions (stable across requests, resets on restart)
 let sessions = {};
-
 const getS = (id) => {
-  if (!sessions[id]) {
-    sessions[id] = { waitingFor: 'waiting_prompt', prompt: '', phone: '' };
-  }
+  if (!sessions[id]) sessions[id] = { waitingFor: 'waiting_prompt', prompt: '', phone: '' };
   return sessions[id];
 };
-
 const setS = (id, d) => { sessions[id] = d; };
 
 const send = async (chatId, text, kb) => {
   const body = { chat_id: chatId, text };
   if (kb) body.reply_markup = kb;
-  try {
-    await axios.post(`${TG}/sendMessage`, body);
-  } catch (e) {
-    console.error('SEND ERR:', e.response?.data || e.message);
-  }
+  try { await axios.post(`${TG}/sendMessage`, body); }
+  catch (e) { console.error('SEND ERR:', e.response?.data || e.message); }
 };
 
 const mainKb = { keyboard: [['🧠 Prompt', '📞 Nomer']], resize_keyboard: true };
-
 const promptKb = {
   keyboard: [
     ["Sen o'zbek tilida tabiiy gaplashadigan call center operatorsan. Mijozning ehtiyojini aniqlab, aniq yechim taklif qil."],
@@ -49,10 +39,8 @@ const promptKb = {
     ["Sen tibbiyot klinikasi administratorisan. Mijozni shifokorga yozib ol va savollariga javob ber."],
     ["Sen internet provayder operatorisan. Mijozning internet muammosini hal qilishga yordam ber."]
   ],
-  resize_keyboard: true,
-  one_time_keyboard: true
+  resize_keyboard: true, one_time_keyboard: true
 };
-
 const rmKb = { remove_keyboard: true };
 
 const makeCall = async (phone, prompt) => {
@@ -60,23 +48,18 @@ const makeCall = async (phone, prompt) => {
     const n = phone.startsWith('+') ? phone : '+' + phone;
     console.log('Calling:', n, '| Prompt:', prompt.substring(0, 80));
 
-    const callBody = {
+    const r = await axios.post('https://api.vapi.ai/call', {
       phoneNumberId: VAPI_PHONE_ID,
-      // Use the configured Vapi assistant (AI Sotuvchi - Jasur)
-      // This keeps the same voice (Sardor), model (GPT-4o), language (Uzbek)
       assistantId: VAPI_ASSISTANT_ID,
-      // Override ONLY the system prompt with the custom one from Telegram
       assistantOverrides: {
         model: {
+          provider: 'openai',
+          model: 'gpt-4o',
           systemPrompt: prompt
         }
       },
       customer: { number: n }
-    };
-
-    const r = await axios.post('https://api.vapi.ai/call', callBody, {
-      headers: { Authorization: `Bearer ${VAPI_KEY}` }
-    });
+    }, { headers: { Authorization: `Bearer ${VAPI_KEY}` } });
 
     console.log('Call started:', r.data?.id);
     return { ok: true, id: r.data.id };
@@ -89,7 +72,6 @@ const makeCall = async (phone, prompt) => {
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
   if (!req.body.message) return;
-
   const msg = req.body.message;
   const chatId = String(msg.chat.id);
   const text = (msg.text || '').trim();
@@ -97,14 +79,9 @@ app.post('/webhook', async (req, res) => {
   const clean = p => p.replace(/[\s\-\(\)]/g, '');
   const phoneRe = /^\+?[0-9]{9,15}$/;
 
-  console.log('MSG:', chatId, text.substring(0, 50));
-
   if (['/start', '/menu'].includes(text)) {
     setS(chatId, { waitingFor: 'waiting_prompt', prompt: '', phone: '' });
-    await send(chatId,
-      `Assalomu alaykum, ${name}! 👋\n\nMen Call Center botman.\n\nNima qila olaman:\n• sizdan PROMPT qabul qilaman\n• sizdan telefon raqam qabul qilaman\n• ikkalasi tayyor bo'lsa Vapi orqali qo'ng'iroqni boshlayman\n\nPastdagi tugmalardan birini bosing:`,
-      mainKb
-    );
+    await send(chatId, `Assalomu alaykum, ${name}! 👋\n\nMen Call Center botman.\n\nNima qila olaman:\n• sizdan PROMPT qabul qilaman\n• sizdan telefon raqam qabul qilaman\n• ikkalasi tayyor bo'lsa Vapi orqali qo'ng'iroqni boshlayman\n\nPastdagi tugmalardan birini bosing:`, mainKb);
     return;
   }
 
@@ -134,11 +111,9 @@ app.post('/webhook', async (req, res) => {
     const r = await makeCall(cp, s.prompt);
     setS(chatId, { waitingFor: 'waiting_prompt', prompt: '', phone: '' });
     await send(chatId,
-      r.ok
-        ? `✅ Qo'ng'iroq muvaffaqiyatli boshlandi!\n📞 ${cp} ga qo'ng'iroq ketmoqda...`
-        : `❌ Qo'ng'iroq amalga oshmadi:\n${r.error}`,
-      mainKb
-    );
+      r.ok ? `✅ Qo'ng'iroq muvaffaqiyatli boshlandi!\n📞 ${cp} ga qo'ng'iroq ketmoqda...`
+           : `❌ Qo'ng'iroq amalga oshmadi:\n${r.error}`,
+      mainKb);
     return;
   }
 
@@ -148,31 +123,18 @@ app.post('/webhook', async (req, res) => {
     return;
   }
 
-  if (text.length > 0) {
-    await send(chatId, '❌ Prompt juda qisqa. Kamida 5 belgi kiriting.', promptKb);
-  }
+  if (text.length > 0) await send(chatId, '❌ Prompt juda qisqa. Kamida 5 belgi kiriting.', promptKb);
 });
 
-app.get('/', (_, res) => res.json({
-  ok: true,
-  bot: !!BOT_TOKEN,
-  vapi: !!VAPI_KEY,
-  assistant: VAPI_ASSISTANT_ID,
-  phone: !!VAPI_PHONE_ID
-}));
+app.get('/', (_, res) => res.json({ ok: true, assistant: VAPI_ASSISTANT_ID, phone: !!VAPI_PHONE_ID }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log('Server started on port', PORT);
   if (WEBHOOK_URL && BOT_TOKEN) {
     try {
-      const r = await axios.post(`${TG}/setWebhook`, {
-        url: WEBHOOK_URL + '/webhook',
-        drop_pending_updates: true
-      });
+      const r = await axios.post(`${TG}/setWebhook`, { url: WEBHOOK_URL + '/webhook', drop_pending_updates: true });
       console.log('Webhook set:', r.data.ok);
-    } catch (e) {
-      console.error('Webhook err:', e.message);
-    }
+    } catch (e) { console.error('Webhook err:', e.message); }
   }
 });
