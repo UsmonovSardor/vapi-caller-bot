@@ -33,16 +33,24 @@ const promptKb = {
     ["Sen telefon do'koni sotuvchisisan. Mijozga mos model tavsiya qil va muloyim gaplash."],
     ["Sen bank xizmatlari bo'yicha maslahatchisan. Mijozga kredit va karta haqida tushuntir."],
     ["Sen tibbiyot klinikasi administratorisan. Mijozni shifokorga yozib ol va savollariga javob ber."],
-    ["Sen internet provayder operatorisan. Mijozning internet muammosini hal qilishga yordam ber."]
+    ["Sen internet provayder operatorisan. Mijozning internet muammosini hal qilishga yordam ber."],
+    ['⬅️ Orqaga']
   ],
   resize_keyboard: true,
   one_time_keyboard: true
 };
 
+const backKb = {
+  keyboard: [['⬅️ Orqaga']],
+  resize_keyboard: true
+};
+
 const rmKb = { remove_keyboard: true };
 
 const getS = (id) => {
-  if (!temp[id]) temp[id] = { step: 'login', login: '', prompt: '', phone: '' };
+  if (!temp[id]) {
+    temp[id] = { step: 'login', login: '', prompt: '', phone: '' };
+  }
   return temp[id];
 };
 
@@ -82,17 +90,9 @@ const initDb = async () => {
     )
   `);
 
-  await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT UNIQUE
-  `);
-
-  await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP
-  `);
-
-  await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
-  `);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id TEXT UNIQUE`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
 };
 
 const isAdmin = (chatId) => String(chatId) === ADMIN_TELEGRAM_ID;
@@ -116,20 +116,24 @@ const isAuthorized = async (chatId) => {
 };
 
 const checkUser = async (chatId, login, password) => {
-  const r = await pool.query(
-    `SELECT * FROM users
-     WHERE login=$1
-       AND is_active=true
-       AND (expires_at IS NULL OR expires_at > NOW())`,
-    [login]
-  );
+  const r = await pool.query(`
+    SELECT *
+    FROM users
+    WHERE login=$1
+      AND is_active=true
+      AND (expires_at IS NULL OR expires_at > NOW())
+  `, [login]);
 
-  if (!r.rows.length) return { ok: false, msg: 'Login topilmadi yoki muddati tugagan.' };
+  if (!r.rows.length) {
+    return { ok: false, msg: 'Login topilmadi yoki muddati tugagan.' };
+  }
 
   const user = r.rows[0];
 
   const passOk = await bcrypt.compare(password, user.password);
-  if (!passOk) return { ok: false, msg: 'Parol xato.' };
+  if (!passOk) {
+    return { ok: false, msg: 'Parol xato.' };
+  }
 
   if (user.telegram_id && String(user.telegram_id) !== String(chatId)) {
     return { ok: false, msg: 'Bu login boshqa Telegram accountga bog‘langan.' };
@@ -185,8 +189,12 @@ const listUsers = async () => {
   if (!r.rows.length) return 'Userlar yo‘q.';
 
   return r.rows.map((u, i) => {
-    const exp = u.expires_at ? new Date(u.expires_at).toLocaleString('uz-UZ') : 'cheksiz';
+    const exp = u.expires_at
+      ? new Date(u.expires_at).toLocaleString('uz-UZ')
+      : 'cheksiz';
+
     const tg = u.telegram_id ? u.telegram_id : 'hali bog‘lanmagan';
+
     return `${i + 1}. ${u.login}\nStatus: ${u.is_active ? 'active' : 'off'}\nTelegram: ${tg}\nMuddati: ${exp}`;
   }).join('\n\n');
 };
@@ -287,7 +295,7 @@ app.post('/webhook', async (req, res) => {
       if (isAdmin(chatId)) {
         await send(
           chatId,
-          `Admin panel:\n\n/adduser ali 1111 7\n/listusers\n/deluser ali\n\nOddiy bot menyusi ham ishlaydi.`,
+          'Admin panel:\n\n/adduser ali 1111 7\n/listusers\n/deluser ali\n\nOddiy bot menyusi ham ishlaydi.',
           mainKb
         );
         return;
@@ -327,7 +335,6 @@ app.post('/webhook', async (req, res) => {
         }
 
         await saveSession(chatId, s.login);
-
         setS(chatId, { step: 'waiting_prompt', login: '', prompt: '', phone: '' });
 
         await send(chatId, '✅ Kirish muvaffaqiyatli!\n\nEndi botdan foydalanishingiz mumkin.', mainKb);
@@ -339,6 +346,12 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
+    if (text === '⬅️ Orqaga') {
+      setS(chatId, { step: 'waiting_prompt', login: '', prompt: '', phone: '' });
+      await send(chatId, '🔙 Asosiy menyuga qaytdingiz.', mainKb);
+      return;
+    }
+
     if (text === '🧠 Prompt') {
       setS(chatId, { ...s, step: 'waiting_prompt' });
       await send(chatId, '🧠 Prompt yuboring yoki 5 tayyor variantdan tanlang.', promptKb);
@@ -347,7 +360,7 @@ app.post('/webhook', async (req, res) => {
 
     if (text === '📞 Nomer') {
       setS(chatId, { ...s, step: 'waiting_phone' });
-      await send(chatId, '📞 Endi telefon raqam yuboring.\nFormat: +998901234567', rmKb);
+      await send(chatId, '📞 Endi telefon raqam yuboring.\nFormat: +998901234567', backKb);
       return;
     }
 
@@ -382,7 +395,7 @@ app.post('/webhook', async (req, res) => {
       await send(
         chatId,
         `✅ Prompt saqlandi!\n\n📝 "${text.substring(0, 60)}..."\n\n📞 Endi telefon raqam yuboring.\nFormat: +998901234567`,
-        rmKb
+        backKb
       );
       return;
     }
